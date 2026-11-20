@@ -1,4 +1,4 @@
-const pool = require('../src/db');
+const pool = require('./db');
 (async () => {
   const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM seats');
   if (rows[0].n > 0) { console.log('Already seeded'); return pool.end(); }
