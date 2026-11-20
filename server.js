@@ -106,5 +106,6 @@ async function sweep() {
 }
 setInterval(sweep, 5000);
 
+require('./extra')(app, pool);
 app.get('/health', (_q, res) => res.json({ ok: true }));
 server.listen(process.env.PORT || 3000, () => console.log('SeatFinder on :' + (process.env.PORT || 3000)));

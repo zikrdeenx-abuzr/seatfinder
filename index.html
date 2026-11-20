@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SeatFinder - Library Seats</title>
+<style>
+:root{--bg:#0f172a;--card:#1e293b;--tx:#e2e8f0;--mut:#94a3b8;--free:#22c55e;--booked:#f59e0b;--occ:#ef4444;--brk:#3b82f6;--me:#a855f7}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--tx);padding-bottom:150px}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:var(--card);position:sticky;top:0;z-index:5}
+header h1{font-size:18px;margin:0}
+header small{color:var(--mut)}
+a.link,button.link{background:none;border:0;color:#93c5fd;font-size:14px;cursor:pointer;text-decoration:underline}
+main{padding:14px;max-width:560px;margin:0 auto}
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:14px}
+input{width:100%;padding:12px;border-radius:10px;border:1px solid #334155;background:#0b1220;color:var(--tx);font-size:16px;margin:6px 0}
+button.btn{width:100%;padding:13px;border:0;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;margin-top:8px;background:#2563eb;color:#fff}
+button.btn.alt{background:#334155}button.btn.red{background:#dc2626}button.btn.green{background:#16a34a}
+.tabs{display:flex;gap:8px;margin-bottom:12px}
+.tabs button{flex:1;padding:10px;border-radius:10px;border:1px solid #334155;background:transparent;color:var(--tx);font-size:15px;cursor:pointer}
+.tabs button.on{background:#2563eb;border-color:#2563eb}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--mut);margin-bottom:10px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.grid{display:grid;gap:6px}
+.seat{aspect-ratio:1;border-radius:8px;border:2px solid transparent;font-size:10px;font-weight:700;color:#04210f;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.seat.free{background:var(--free)}.seat.booked{background:var(--booked)}.seat.occupied{background:var(--occ);color:#fff}.seat.on_break{background:var(--brk);color:#fff}
+.seat.mine{border-color:var(--me);box-shadow:0 0 0 2px var(--me)}
+.stat{display:flex;gap:8px;font-size:13px;margin-bottom:10px;color:var(--mut)}
+.mine-bar{position:fixed;left:0;right:0;bottom:0;background:#312e81;padding:12px 16px;z-index:6;display:none}
+.mine-bar b{font-size:16px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;background:#0b1220;border:1px solid #475569;padding:10px 16px;border-radius:10px;z-index:9;display:none;max-width:90%}
+.sheet{position:fixed;inset:0;background:#0009;display:none;align-items:flex-end;z-index:8}
+.sheet>div{background:var(--card);width:100%;border-radius:18px 18px 0 0;padding:18px;max-width:560px;margin:0 auto}
+.bar{height:14px;border-radius:7px;background:#2563eb;margin:3px 0}
+.row{display:flex;align-items:center;gap:8px;font-size:13px}.row span:first-child{width:58px;color:var(--mut)}
+#qr{background:#fff;padding:10px;display:inline-block;border-radius:8px;margin-top:8px}
+.err{color:#fca5a5;font-size:14px;min-height:18px}
+</style>
+</head>
+<body>
+<header><div><h1>SeatFinder</h1><small id="conn">connecting...</small></div><div id="who"></div></header>
+<main>
+
+<div id="loginView" class="card" style="display:none">
+  <h3 style="margin-top:0">Login</h3>
+  <input id="reg" placeholder="Registration number" autocapitalize="characters">
+  <input id="nm" placeholder="Your name">
+  <div class="err" id="loginErr"></div>
+  <button class="btn" onclick="doLogin()">Continue</button>
+</div>
+
+<div id="mapView" style="display:none">
+  <div class="tabs" id="floorTabs"></div>
+  <div class="legend">
+    <span><i style="background:var(--free)"></i>Free</span>
+    <span><i style="background:var(--booked)"></i>Booked</span>
+    <span><i style="background:var(--occ)"></i>Occupied</span>
+    <span><i style="background:var(--brk)"></i>On break</span>
+    <span><i style="background:var(--me)"></i>Yours</span>
+  </div>
+  <div class="stat" id="counts"></div>
+  <div class="card"><div class="grid" id="grid"></div></div>
+</div>
+
+<div id="adminView" style="display:none">
+  <div class="card"><h3 style="margin-top:0">Peak hours (IST)</h3><div id="peak"></div></div>
+  <div class="card"><h3 style="margin-top:0">Most hogged seats</h3>
+    <small style="color:var(--mut)">Seats whose booking or break ran out unused, again and again.</small><div id="hog"></div></div>
+  <div class="card"><h3 style="margin-top:0">Seat QR</h3>
+    <input id="qrSeat" placeholder="Seat label, e.g. F1-A1" oninput="makeQR()">
+    <div id="qr" style="display:none"></div>
+    <div id="qrUrl" style="font-size:12px;color:var(--mut);word-break:break-all;margin-top:6px"></div></div>
+</div>
+</main>
+
+<div class="mine-bar" id="mineBar"><b id="mineTxt"></b><div id="mineSub" style="font-size:13px;color:#c7d2fe"></div></div>
+<div class="toast" id="toast"></div>
+<div class="sheet" id="sheet" onclick="if(event.target===this)closeSheet()"><div id="sheetBody"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+var S={token:null,user:null,seats:[],floors:[],me:null,floor:null,ws:null,deepSeat:null};
+var $=function(id){return document.getElementById(id)};
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function lsDel(k){try{localStorage.removeItem(k)}catch(e){}}
+function toast(t){var el=$('toast');el.textContent=t;el.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(function(){el.style.display='none'},2800)}
+
+async function api(path,opt){
+  opt=opt||{};opt.headers=Object.assign({'Content-Type':'application/json'},opt.headers||{});
+  if(S.token)opt.headers.Authorization='Bearer '+S.token;
+  var r=await fetch(path,opt);var j=await r.json().catch(function(){return{}});
+  if(!r.ok){if(r.status===401)logout(true);throw new Error(j.error||'Error')}
+  return j;
+}
+
+function show(v){['loginView','mapView','adminView'].forEach(function(x){$(x).style.display=(x===v)?'block':'none'})}
+function route(){
+  if(location.hash==='#admin'){show('adminView');loadAdmin();return}
+  if(!S.token){show('loginView');return}
+  show('mapView');
+}
+
+async function doLogin(){
+  $('loginErr').textContent='';
+  try{
+    var j=await api('/api/login',{method:'POST',body:JSON.stringify({reg_no:$('reg').value,name:$('nm').value})});
+    S.token=j.token;S.user=j.user;lsSet('sf_token',j.token);lsSet('sf_user',JSON.stringify(j.user));
+    start();
+  }catch(e){$('loginErr').textContent=e.message}
+}
+function logout(silent){S.token=null;S.user=null;lsDel('sf_token');lsDel('sf_user');if(S.ws){S.ws.close()}renderWho();route();if(!silent)toast('Logged out')}
+function renderWho(){
+  $('who').innerHTML=S.user?('<small>'+esc(S.user.name)+'</small> <button class="link" onclick="logout()">Logout</button>'):'';
+}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+
+async function start(){
+  renderWho();route();
+  if(!S.token)return;
+  S.floors=await api('/api/floors');
+  if(!S.floor&&S.floors.length)S.floor=S.floors[0].id;
+  S.seats=await api('/api/seats');
+  await refreshMe();render();connectWS();
+  if(S.deepSeat){var id=S.deepSeat;S.deepSeat=null;openSeat(id,true)}
+}
+async function refreshMe(){try{S.me=(await api('/api/me')).seat}catch(e){}}
+
+function connectWS(){
+  if(S.ws&&S.ws.readyState<2)return;
+  var ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');S.ws=ws;
+  ws.onopen=function(){$('conn').textContent='live'};
+  ws.onclose=function(){$('conn').textContent='reconnecting...';if(S.token)setTimeout(connectWS,2000)};
+  ws.onmessage=function(ev){
+    var m=JSON.parse(ev.data);
+    if(m.type==='snapshot'){S.seats=m.seats;refreshMe().then(render)}
+    else if(m.type==='seat'){
+      var i=S.seats.findIndex(function(x){return x.id===m.seat.id});
+      if(i>=0)S.seats[i]=m.seat;else S.seats.push(m.seat);
+      if(S.me&&S.me.id===m.seat.id)refreshMe().then(render);else render();
+    }
+  };
+}
+
+function render(){
+  if(!S.token)return;
+  var ft=$('floorTabs');
+  ft.innerHTML=S.floors.map(function(f){return '<button class="'+(f.id===S.floor?'on':'')+'" onclick="S.floor='+f.id+';render()">'+esc(f.name)+'</button>'}).join('');
+  var fs=S.seats.filter(function(s){return s.floor_id===S.floor});
+  var cols=fs.reduce(function(a,s){return Math.max(a,s.x+1)},1);
+  var g=$('grid');g.style.gridTemplateColumns='repeat('+cols+',1fr)';
+  fs.sort(function(a,b){return a.y-b.y||a.x-b.x});
+  g.innerHTML=fs.map(function(s){
+    var mine=S.me&&S.me.id===s.id;
+    return '<button class="seat '+s.status+(mine?' mine':'')+'" onclick="openSeat('+s.id+')">'+esc(s.label.split('-')[1]||s.label)+'</button>';
+  }).join('');
+  var c={free:0,booked:0,occupied:0,on_break:0};fs.forEach(function(s){c[s.status]++});
+  $('counts').innerHTML='<b style="color:var(--free)">'+c.free+' free</b> of '+fs.length+' on this floor';
+  renderMine();
+}
+
+function renderMine(){
+  var b=$('mineBar');
+  if(!S.me){b.style.display='none';return}
+  b.style.display='block';
+  var names={booked:'Booked - scan QR at seat to check in',occupied:'Checked in',on_break:'On break - come back before time runs out'};
+  $('mineTxt').textContent='Your seat: '+S.me.label;
+  var t=S.me.expires_at?Math.max(0,Math.round((new Date(S.me.expires_at)-Date.now())/1000)):null;
+  $('mineSub').textContent=names[S.me.status]+(t!==null?' - '+Math.floor(t/60)+':'+String(t%60).padStart(2,'0')+' left':'');
+}
+setInterval(renderMine,1000);
+
+function openSeat(id,fromQR){
+  var s=S.seats.find(function(x){return x.id===id});if(!s)return;
+  var mine=S.me&&S.me.id===id;var h='<h3 style="margin-top:0">Seat '+esc(s.label)+'</h3>';
+  if(s.status==='free'){
+    h+='<p style="color:var(--mut)">This seat is free.</p>';
+    if(S.me)h+='<p style="color:#fca5a5">You already hold seat '+esc(S.me.label)+'. Release it first.</p>';
+    else h+='<button class="btn green" onclick="act('+id+',\'checkin\')">I am here - check in</button><button class="btn" onclick="act('+id+',\'book\')">Book for 15 min</button>';
+  }else if(mine){
+    if(s.status==='booked')h+='<button class="btn green" onclick="act('+id+',\'checkin\')">Check in (scan done)</button>';
+    if(s.status==='occupied')h+='<button class="btn" onclick="act('+id+',\'break\')">Take a break (20 min)</button>';
+    if(s.status==='on_break')h+='<button class="btn green" onclick="act('+id+',\'checkin\')">I am back</button>';
+    h+='<button class="btn red" onclick="act('+id+',\'release\')">Release seat</button>';
+  }else h+='<p style="color:var(--mut)">This seat is '+s.status.replace('_',' ')+'.</p>';
+  h+='<button class="btn alt" onclick="closeSheet()">Close</button>';
+  $('sheetBody').innerHTML=h;$('sheet').style.display='flex';
+}
+function closeSheet(){$('sheet').style.display='none'}
+async function act(id,what){
+  closeSheet();
+  try{await api('/api/seats/'+id+'/'+what,{method:'POST'});await refreshMe();render();
+    toast({book:'Booked. Check in within 15 min.',checkin:'Checked in.',break:'Break started: 20 min.',release:'Seat released.'}[what])}
+  catch(e){toast(e.message)}
+}
+
+async function loadAdmin(){
+  try{
+    var d=await api('/api/admin/stats');
+    var max=d.peak.reduce(function(a,p){return Math.max(a,p.n)},1);
+    $('peak').innerHTML=d.peak.length?d.peak.map(function(p){return '<div class="row"><span>'+p.hour+':00</span><div class="bar" style="width:'+Math.max(4,p.n/max*70)+'%"></div><span style="width:auto">'+p.n+'</span></div>'}).join(''):'<small style="color:var(--mut)">No data yet.</small>';
+    $('hog').innerHTML=d.hogged.length?d.hogged.map(function(h){return '<div class="row"><span>'+esc(h.label)+'</span><b>'+h.n+' times</b></div>'}).join(''):'<small style="color:var(--mut)">No hogged seats yet.</small>';
+  }catch(e){toast(e.message)}
+}
+function makeQR(){
+  var label=$('qrSeat').value.trim().toUpperCase();
+  var s=S.seats.find(function(x){return x.label===label});
+  var box=$('qr');
+  if(!s){box.style.display='none';$('qrUrl').textContent='';return}
+  var url=location.origin+'/?seat='+s.id;
+  box.innerHTML='';box.style.display='inline-block';
+  if(window.QRCode)new QRCode(box,{text:url,width:180,height:180});
+  $('qrUrl').textContent=url;
+}
+window.addEventListener('hashchange',route);
+
+(async function init(){
+  var q=new URLSearchParams(location.search).get('seat');if(q)S.deepSeat=+q;
+  S.token=lsGet('sf_token');try{S.user=JSON.parse(lsGet('sf_user')||'null')}catch(e){}
+  if(location.hash==='#admin'){try{S.seats=await api('/api/seats')}catch(e){}}
+  if(S.token)start();else route();
+})();
+</script>
+</body>
+</html>
